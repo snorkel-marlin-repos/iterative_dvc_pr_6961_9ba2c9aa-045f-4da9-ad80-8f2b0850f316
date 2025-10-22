@@ -116,8 +116,6 @@ class TabularData(MutableSequence[Sequence["CellT"]]):
             del col[item]
 
     def __len__(self) -> int:
-        if not self._columns:
-            return 0
         return len(self.columns[0])
 
     @property
@@ -184,38 +182,21 @@ class TabularData(MutableSequence[Sequence["CellT"]]):
             {k: self._columns[k][i] for k in keys} for i in range(len(self))
         ]
 
-    def dropna(self, axis: str = "rows", how="any"):
+    def dropna(self, axis: str = "rows"):
         if axis not in ["rows", "cols"]:
             raise ValueError(
                 f"Invalid 'axis' value {axis}."
                 "Choose one of ['rows', 'cols']"
             )
-        if how not in ["any", "all"]:
-            raise ValueError(
-                f"Invalid 'how' value {how}." "Choose one of ['any', 'all']"
-            )
-
-        match_line: Set = set()
-        match = True
-        if how == "all":
-            match = False
-
+        to_drop: Set = set()
         for n_row, row in enumerate(self):
             for n_col, col in enumerate(row):
-                if (col == self._fill_value) is match:
+                if col == self._fill_value:
                     if axis == "rows":
-                        match_line.add(n_row)
+                        to_drop.add(n_row)
                         break
                     else:
-                        match_line.add(self.keys()[n_col])
-
-        to_drop = match_line
-        if how == "all":
-            if axis == "rows":
-                to_drop = set(range(len(self)))
-            else:
-                to_drop = set(self.keys())
-            to_drop -= match_line
+                        to_drop.add(self.keys()[n_col])
 
         if axis == "rows":
             for name in self.keys():
