@@ -180,43 +180,28 @@ def test_row_from_dict():
 
 
 @pytest.mark.parametrize(
-    "axis,how,data,expected",
+    "axis,expected",
     [
         (
             "rows",
-            "any",
-            [["foo"], ["foo", "bar"], ["foo", "bar", "foobar"]],
             [
                 ["foo", "bar", "foobar"],
             ],
         ),
-        (
-            "rows",
-            "all",
-            [["foo"], ["foo", "bar"], ["", "", ""]],
-            [
-                ["foo", "", ""],
-                ["foo", "bar", ""],
-            ],
-        ),
-        (
-            "cols",
-            "any",
-            [["foo"], ["foo", "bar"], ["foo", "bar", "foobar"]],
-            [["foo"], ["foo"], ["foo"]],
-        ),
-        (
-            "cols",
-            "all",
-            [["foo"], ["foo", "bar"], ["", "", ""]],
-            [["foo", ""], ["foo", "bar"], ["", ""]],
-        ),
+        ("cols", [["foo"], ["foo"], ["foo"]]),
     ],
 )
-def test_dropna(axis, how, data, expected):
+def test_dropna(axis, expected):
     td = TabularData(["col-1", "col-2", "col-3"])
-    td.extend(data)
-    td.dropna(axis, how)
+    td.extend([["foo"], ["foo", "bar"], ["foo", "bar", "foobar"]])
+    assert list(td) == [
+        ["foo", "", ""],
+        ["foo", "bar", ""],
+        ["foo", "bar", "foobar"],
+    ]
+
+    td.dropna(axis)
+
     assert list(td) == expected
 
 

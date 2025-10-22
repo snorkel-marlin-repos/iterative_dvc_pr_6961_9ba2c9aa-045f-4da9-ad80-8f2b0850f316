@@ -2,10 +2,8 @@ import argparse
 
 from dvc.command.base import CmdBase, append_doc_link, fix_subparsers
 from dvc.command.config import CmdConfig
-from dvc.compare import TabularData
 from dvc.config import ConfigError
 from dvc.exceptions import DvcException
-from dvc.types import Dict, List
 from dvc.ui import ui
 from dvc.utils import format_link
 
@@ -73,56 +71,18 @@ class CmdMachineRemove(CmdMachineConfig):
 
 
 class CmdMachineList(CmdMachineConfig):
-    TABLE_COLUMNS = [
-        "name",
-        "cloud",
-        "region",
-        "image",
-        "spot",
-        "spot_price",
-        "instance_hdd_size",
-        "instance_type",
-        "ssh_private",
-        "startup_script",
-    ]
-
-    PRIVATE_COLUMNS = ["ssh_private", "startup_script"]
-
-    def _hide_private(self, conf):
-        for machine in conf:
-            for column in self.PRIVATE_COLUMNS:
-                if column in conf[machine]:
-                    conf[machine][column] = "***"
-
-    def _show_origin(self):
+    def run(self):
         levels = [self.args.level] if self.args.level else self.config.LEVELS
         for level in levels:
             conf = self.config.read(level)["machine"]
             if self.args.name:
                 conf = conf.get(self.args.name, {})
-            self._hide_private(conf)
-            prefix = self._config_file_prefix(True, self.config, level)
+            prefix = self._config_file_prefix(
+                self.args.show_origin, self.config, level
+            )
             configs = list(self._format_config(conf, prefix))
             if configs:
                 ui.write("\n".join(configs))
-
-    def _show_table(self):
-        td = TabularData(self.TABLE_COLUMNS, fill_value="-")
-        conf = self.config.read()["machine"]
-        if self.args.name:
-            conf = {self.args.name: conf.get(self.args.name, {})}
-        self._hide_private(conf)
-        for machine, machine_config in conf.items():
-            machine_config["name"] = machine
-            td.row_from_dict(machine_config)
-        td.dropna("cols", "all")
-        td.render()
-
-    def run(self):
-        if self.args.show_origin:
-            self._show_origin()
-        else:
-            self._show_table()
         return 0
 
 
@@ -233,8 +193,8 @@ class CmdMachineCreate(CmdBase):
 
 
 class CmdMachineStatus(CmdBase):
-    INSTANCE_FIELD = ["name", "instance", "status"]
     SHOWN_FIELD = [
+        "name",
         "cloud",
         "instance_ip",
         "instance_type",
@@ -242,34 +202,23 @@ class CmdMachineStatus(CmdBase):
         "instance_gpu",
     ]
 
-    def _add_row(
-        self,
-        name: str,
-        all_status: List[Dict],
-        td: TabularData,
-    ):
-
+    def _show_machine_status(self, name: str):
+        ui.write(f"machine '{name}':")
+        all_status = list(self.repo.machine.status(name))
         if not all_status:
-            row = [name, None, "offline"]
-            td.append(row)
+            ui.write("\toffline")
         for i, status in enumerate(all_status, start=1):
-            row = [name, f"num_{i}", "running" if status else "offline"]
+            ui.write(f"\tinstance_num_{i}:")
             for field in self.SHOWN_FIELD:
-                value = str(status.get(field, ""))
-                row.append(value)
-            td.append(row)
+                value = status.get(field, None)
+                ui.write(f"\t\t{field:20}: {value}")
 
     def run(self):
         if self.repo.machine is None:
             raise MachineDisabledError
 
-        td = TabularData(
-            self.INSTANCE_FIELD + self.SHOWN_FIELD, fill_value="-"
-        )
-
         if self.args.name:
-            all_status = list(self.repo.machine.status(self.args.name))
-            self._add_row(self.args.name, all_status, td)
+            self._show_machine_status(self.args.name)
         else:
             name_set = set()
             for level in self.repo.config.LEVELS:
@@ -277,11 +226,8 @@ class CmdMachineStatus(CmdBase):
                 name_set.update(conf.keys())
             name_list = list(name_set)
             for name in sorted(name_list):
-                all_status = list(self.repo.machine.status(name))
-                self._add_row(name, all_status, td)
+                self._show_machine_status(name)
 
-        td.dropna("cols", "all")
-        td.render()
         return 0
 
 
